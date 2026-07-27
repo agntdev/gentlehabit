@@ -1,20 +1,13 @@
 [
-  {
-    "name": "Check In Now",
-    "steps": [
-      {
-        "expect": [
-          {
-            "method": "sendMessage",
-            "payload": {
-              "text": "Mark current habit as done"
-            }
-          }
-        ],
-        "send": {
-          "callback": "checkin:now"
-        }
-      }
-    ]
-  }
+  { "name": "check-in records once and prevents accidental double counting", "steps": [
+    { "send": { "callback": "habit:create" }, "expect": [{ "method": "sendMessage" }] },
+    { "send": { "text": "Walk" }, "expect": [{ "method": "sendMessage" }] },
+    { "send": { "callback": "habit:schedule:daily" }, "expect": [{ "method": "sendMessage" }] },
+    { "send": { "text": "08:00" }, "expect": [{ "method": "sendMessage" }] },
+    { "send": { "callback": "checkin:now" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Done — “Walk” is checked off. Your streak is 1 day." } }] },
+    { "send": { "callback": "checkin:now" }, "expect": [{ "method": "sendMessage", "payload": { "text": "You’ve already checked in for this habit today. Nice steady work." } }] }
+  ] },
+  { "name": "later keeps a reminder open", "steps": [
+    { "send": { "callback": "reminder:later:1" }, "expect": [{ "method": "sendMessage", "payload": { "text": "No pressure. I’ll keep this habit ready when you are." } }] }
+  ] }
 ]

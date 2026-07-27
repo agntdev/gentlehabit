@@ -49,6 +49,40 @@ interface Reminder {
   at: number; // epoch ms
   chatId: number | string;
   text: string;
+  replyMarkup?: unknown;
+  repeat?: { timeZone: string; reminderTime: string; days: number[] };
+}
+
+// One injectable clock seam for alarms and reminder scheduling.
+let clock: () => number = () => Date.now();
+export function setReminderClockForTests(next?: () => number): void { clock = next ?? (() => Date.now()); }
+
+function zoneParts(epoch: number, timeZone: string): { year: number; month: number; day: number; hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(epoch));
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
+}
+function offsetMinutes(epoch: number, timeZone: string): number {
+  const text = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" }).formatToParts(new Date(epoch)).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = text.match(/GMT([+-])(\d{2}):(\d{2})/);
+  return match ? (match[1] === "+" ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3])) : 0;
+}
+function localEpoch(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): number {
+  const guess = Date.UTC(year, month - 1, day, hour, minute);
+  return guess - offsetMinutes(guess, timeZone) * 60_000;
+}
+function nextReminder(timeZone: string, reminderTime: string, days: number[], after = clock()): number {
+  const local = zoneParts(after, timeZone); const [hour, minute] = reminderTime.split(":").map(Number) as [number, number];
+  let candidate = localEpoch(local.year, local.month, local.day, hour, minute, timeZone);
+  let next = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  if (candidate <= after) next.setUTCDate(next.getUTCDate() + 1);
+  while (true) {
+    const weekday = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate())).getUTCDay();
+    candidate = localEpoch(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), hour, minute, timeZone);
+    if (days.includes(weekday) && candidate > after) break;
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  return candidate;
 }
 
 /**
@@ -103,6 +137,21 @@ export async function remindAt(
   } catch {
     /* best-effort: a reminder we couldn't schedule must not break the reply */
   }
+}
+
+/** Schedule a daily local-time reminder. The Durable Object re-arms the next
+ * occurrence after delivery, so it survives Worker restarts and DST shifts. */
+export async function scheduleDailyHabitReminder(env: WorkerEnv, chatId: number | string, habitId: string, timeZone: string, reminderTime: string, habitName: string, days: number[]): Promise<void> {
+  const at = nextReminder(timeZone, reminderTime, days);
+  const replyMarkup = { inline_keyboard: [[
+    { text: "Done", callback_data: `reminder:done:${habitId}` },
+    { text: "Skip", callback_data: `reminder:skip:${habitId}` },
+    { text: "Later", callback_data: `reminder:later:${habitId}` },
+  ]] };
+  try {
+    const stub = env.CHAT_DO.get(env.CHAT_DO.idFromName("chat:" + chatId));
+    await stub.fetch("https://do/remind", { method: "POST", body: JSON.stringify({ at, chatId, text: `A gentle reminder for “${habitName}”.`, replyMarkup, repeat: { timeZone, reminderTime, days } } satisfies Reminder) });
+  } catch { /* scheduling is best-effort; creation still succeeds */ }
 }
 
 async function tg(token: string, method: string, payload: unknown): Promise<void> {
@@ -160,12 +209,13 @@ export class ChatDO {
   // Fires at the earliest reminder's wall-clock time. Sends every due reminder,
   // drops them, and re-arms for whatever remains.
   async alarm(): Promise<void> {
-    const now = Date.now();
+    const now = clock();
     const list = (await this.state.storage.get<Reminder[]>("reminders")) ?? [];
     const due = list.filter((r) => r.at <= now);
     const rest = list.filter((r) => r.at > now);
     for (const r of due) {
-      await tg(this.env.BOT_TOKEN, "sendMessage", { chat_id: r.chatId, text: r.text });
+      try { await tg(this.env.BOT_TOKEN, "sendMessage", { chat_id: r.chatId, text: r.text, ...(r.replyMarkup ? { reply_markup: r.replyMarkup } : {}) }); } catch { /* a blocked chat must not abort other reminders */ }
+      if (r.repeat) rest.push({ ...r, at: nextReminder(r.repeat.timeZone, r.repeat.reminderTime, r.repeat.days, now) });
     }
     await this.state.storage.put("reminders", rest);
     await this.rearm(rest);
