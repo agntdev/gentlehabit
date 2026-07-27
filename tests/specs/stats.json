@@ -1,20 +1,5 @@
 [
-  {
-    "name": "/stats",
-    "steps": [
-      {
-        "expect": [
-          {
-            "method": "sendMessage",
-            "payload": {
-              "text": "Show current streaks and metrics"
-            }
-          }
-        ],
-        "send": {
-          "text": "/stats"
-        }
-      }
-    ]
-  }
+  { "name": "/stats has a clear empty state", "steps": [
+    { "send": { "text": "/stats" }, "expect": [{ "method": "sendMessage", "payload": { "text": "No habits yet — tap ➕ Create habit to begin." } }] }
+  ] }
 ]

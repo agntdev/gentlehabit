@@ -1,20 +1,12 @@
 [
-  {
-    "name": "Create New Habit",
-    "steps": [
-      {
-        "expect": [
-          {
-            "method": "sendMessage",
-            "payload": {
-              "text": "Launch guided habit creation flow"
-            }
-          }
-        ],
-        "send": {
-          "callback": "habit:create"
-        }
-      }
-    ]
-  }
+  { "name": "habit creation collects name, schedule, and reminder", "steps": [
+    { "send": { "callback": "habit:create" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What would you like to build? Send a short habit name." } }] },
+    { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage", "payload": { "text": "When do you want to practise it?" } }] },
+    { "send": { "callback": "habit:schedule:daily" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What time should I remind you? Send it as HH:MM, like 07:30." } }] },
+    { "send": { "text": "07:30" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Your habit “Read” is ready. I’ll remind you at 07:30 in UTC." } }] }
+  ] },
+  { "name": "time zone accepts an IANA zone", "steps": [
+    { "send": { "callback": "habit:timezone" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Set your time zone first. Send an IANA name, like Europe/London or America/New_York." } }] },
+    { "send": { "text": "America/New_York" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Your time zone is set. Now let’s create your first habit." } }] }
+  ] }
 ]

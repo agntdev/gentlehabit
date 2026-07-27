@@ -1,0 +1,5 @@
+[
+  { "name": "habit management has a useful empty state", "steps": [
+    { "send": { "callback": "habits:manage" }, "expect": [{ "method": "editMessageText", "payload": { "text": "No habits yet — tap ➕ Create habit to add one." } }] }
+  ] }
+]

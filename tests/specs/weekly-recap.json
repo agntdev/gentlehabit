@@ -1,0 +1,5 @@
+[
+  { "name": "weekly recap has an encouraging empty state", "steps": [
+    { "send": { "callback": "recap:show" }, "expect": [{ "method": "editMessageText", "payload": { "text": "No weekly recap yet — create a habit and your week will appear here." } }] }
+  ] }
+]

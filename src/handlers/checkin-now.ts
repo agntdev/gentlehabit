@@ -1,17 +1,13 @@
 import { Composer } from "grammy";
-
-// SCAFFOLD — generated from the bot blueprint BEFORE the agent runs.
-// Keep a LIVE registration (.command / .callbackQuery / …) so this feature is
-// never an empty stub. Replace the reply body with real logic + copy; if you
-// change the user-facing text, update tests/specs to match EXACTLY.
-// Do NOT rewrite src/bot.ts — buildBot() already auto-loads this module.
-// Menu: wire this into /start via registerMainMenuItem({ label: "Check In Now", data: "checkin:now" }) if the toolkit exposes it.
-
-const composer = new Composer();
-
-composer.callbackQuery("checkin:now", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.reply("Mark current habit as done");
-});
-
+import type { Ctx } from "../bot.js";
+import { dateInZone, metrics, now, profile } from "../habits.js";
+import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
+registerMainMenuItem({ label: "✓ Check in now", data: "checkin:now", order: 20 });
+const composer = new Composer<Ctx>();
+function choices(p: NonNullable<ReturnType<typeof profile>>) { return inlineKeyboard([...p.habits.filter((h) => h.active).map((h) => [inlineButton(h.name, `checkin:habit:${h.id}`)]), [inlineButton("Back to menu", "menu:main")]]); }
+async function prompt(ctx: Ctx) { const p = profile(ctx.session); const active = p?.habits.filter((h) => h.active) ?? []; if (!p || !active.length) { await ctx.reply("No active habits yet — tap ➕ Create habit to add one.", { reply_markup: inlineKeyboard([[inlineButton("Create habit", "habit:create")]]) }); return; } if (active.length === 1) { await record(ctx, active[0]!.id, "done"); return; } await ctx.reply("Which habit did you complete?", { reply_markup: choices(p) }); }
+async function record(ctx: Ctx, id: string, status: "done" | "skipped") { const p = profile(ctx.session); const habit = p?.habits.find((h) => h.id === id && h.active); if (!p || !habit) { await ctx.reply("That habit isn’t available anymore. Choose one from your menu."); return; } const date = dateInZone(now(), p.timeZone); const existing = p.checkins.find((c) => c.habitId === id && c.date === date); if (existing) { await ctx.reply(existing.status === "done" ? "You’ve already checked in for this habit today. Nice steady work." : "You already skipped this habit today. Tomorrow is a fresh start."); return; } p.checkins.push({ habitId: id, date, status }); if (status === "skipped") { await ctx.reply(`Skipped “${habit.name}” for today. Be kind to yourself and come back tomorrow.`); return; } const m = metrics(p, habit); const milestone = p.milestones && [7,21,30].includes(m.current); await ctx.reply(milestone ? `🌱 ${m.current}-day streak for “${habit.name}”. You’re building something real.` : `Done — “${habit.name}” is checked off. Your streak is ${m.current} day${m.current === 1 ? "" : "s"}.`, { reply_markup: inlineKeyboard([[inlineButton("Back to menu", "menu:main")]]) }); }
+composer.callbackQuery("checkin:now", async (ctx) => { await ctx.answerCallbackQuery(); await prompt(ctx); });
+composer.callbackQuery(/^checkin:habit:(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); await record(ctx, ctx.match[1], "done"); });
+composer.callbackQuery(/^reminder:(done|skip|later):(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); if (ctx.match[1] === "later") { await ctx.reply("No pressure. I’ll keep this habit ready when you are."); return; } await record(ctx, ctx.match[2], ctx.match[1] === "done" ? "done" : "skipped"); });
 export default composer;

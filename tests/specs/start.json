@@ -1,16 +1,5 @@
 [
-  {
-    "name": "/start replies with the welcome + main menu",
-    "steps": [
-      {
-        "send": { "text": "/start" },
-        "expect": [
-          {
-            "method": "sendMessage",
-            "payload": { "text": "👋 Welcome! Tap a button below to get started." }
-          }
-        ]
-      }
-    ]
-  }
+  { "name": "/start opens calm first-run onboarding", "steps": [
+    { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Welcome. Let’s begin by setting your time zone, so reminders arrive at a good time for you." } }] }
+  ] }
 ]
