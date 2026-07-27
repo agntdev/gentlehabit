@@ -1,0 +1,20 @@
+[
+  {
+    "name": "/stats",
+    "steps": [
+      {
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Show current streaks and metrics"
+            }
+          }
+        ],
+        "send": {
+          "text": "/stats"
+        }
+      }
+    ]
+  }
+]
