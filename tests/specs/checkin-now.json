@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Check In Now",
+    "steps": [
+      {
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Mark current habit as done"
+            }
+          }
+        ],
+        "send": {
+          "callback": "checkin:now"
+        }
+      }
+    ]
+  }
+]
